@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2e7d32"><link rel="manifest" href="manifest.json">
+<title>Plant Water Reminder</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#f4f8f4;color:#17351d}
+header{background:#2e7d32;color:white;padding:22px 18px;border-radius:0 0 22px 22px}
+h1{margin:0;font-size:25px}.wrap{max-width:650px;margin:auto}.content{padding:16px}
+button,input{font:inherit}button{border:0;border-radius:12px;padding:12px 15px;background:#2e7d32;color:white;font-weight:700}
+.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #0001}
+.row{display:flex;gap:8px;flex-wrap:wrap}.muted{color:#607565}.danger{background:#b3261e}.water{background:#1565c0}
+input{width:100%;box-sizing:border-box;padding:11px;border:1px solid #ccd8cd;border-radius:10px;margin:5px 0 10px}
+dialog{border:0;border-radius:18px;padding:20px;max-width:380px;width:calc(100% - 50px)}
+</style></head>
+<body><div class="wrap">
+<header><h1>🌱 Plant Water Reminder</h1><div id="status">Your personal watering list</div></header>
+<div class="content">
+<div class="row"><button onclick="openAdd()">＋ Add plant</button><button onclick="enableNotifications()">🔔 Enable notifications</button></div>
+<div id="list"></div>
+</div></div>
+<dialog id="dlg"><h2>Add plant</h2>
+<label>Plant name<input id="name" placeholder="Tomato"></label>
+<label>Water every (days)<input id="days" type="number" min="1" value="2"></label>
+<label>Reminder time<input id="time" type="time" value="07:00"></label>
+<div class="row"><button onclick="savePlant()">Save</button><button class="danger" onclick="dlg.close()">Cancel</button></div>
+</dialog>
+<script>
+const KEY='plants-v1'; let plants=JSON.parse(localStorage.getItem(KEY)||'[]');
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function render(){list.innerHTML=plants.length?plants.map((p,i)=>`<div class="card"><h2>🌿 ${esc(p.name)}</h2><div class="muted">💧 Every ${p.days} day(s) • ⏰ ${p.time}</div><p>Next: <b>${new Date(p.next).toLocaleString()}</b></p><div class="row"><button class="water" onclick="water(${i})">💧 Watered</button><button class="danger" onclick="removePlant(${i})">Delete</button></div></div>`).join(''):'<div class="card"><h2>No plants yet 🌱</h2><p class="muted">Add your first plant and set its watering schedule.</p></div>'}
+function openAdd(){dlg.showModal()}
+function savePlant(){let n=name.value.trim()||'My Plant',d=Math.max(1,+days.value||2),t=time.value||'07:00';let next=nextDate(t,d);plants.push({name:n,days:d,time:t,next});localStorage.setItem(KEY,JSON.stringify(plants));dlg.close();render()}
+function nextDate(t,d){let [h,m]=t.split(':').map(Number),x=new Date();x.setHours(h,m,0,0);if(x<=new Date())x.setDate(x.getDate()+d);return x.toISOString()}
+function water(i){let p=plants[i];p.next=nextDate(p.time,p.days);localStorage.setItem(KEY,JSON.stringify(plants));render();alert('💧 '+p.name+' marked as watered!')}
+function removePlant(i){if(confirm('Delete '+plants[i].name+'?')){plants.splice(i,1);localStorage.setItem(KEY,JSON.stringify(plants));render()}}
+async function enableNotifications(){if(!('Notification'in window)){alert('Notifications are not supported here.');return}let r=await Notification.requestPermission();alert(r==='granted'?'🔔 Notifications enabled!':'Notifications were not allowed.')}
+function check(){let now=Date.now(),changed=false;plants.forEach(p=>{if(new Date(p.next).getTime()<=now){notify(p);p.next=nextDate(p.time,p.days);changed=true}});if(changed){localStorage.setItem(KEY,JSON.stringify(plants));render()}}
+async function notify(p){try{let reg=await navigator.serviceWorker.ready;if(Notification.permission==='granted')await reg.showNotification('💧 Water your plant',{body:'🌱 Time to water '+p.name+'!',tag:'plant-'+p.name,vibrate:[300,150,300],requireInteraction:true});}catch(e){}}
+render();setInterval(check,30000);check();
+</script></body></html>
